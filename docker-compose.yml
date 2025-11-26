@@ -1,0 +1,60 @@
+version: "3.9"
+services:
+  web:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+      args:
+        - PYTHONUNBUFFERED=1
+    image: docker-practice/web:latest
+    env_file: .env
+    environment:
+      REDIS_URL: "redis://redis:6379/0"
+      POSTGRES_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - appnet
+    restart: unless-stopped
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - appnet
+
+  redis:
+    image: redis:7
+    networks:
+      - appnet
+
+  nginx:
+    image: nginx:stable
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8080:80"
+    depends_on:
+      - web
+    networks:
+      - appnet
+
+volumes:
+  pgdata:
+
+networks:
+  appnet:
+    driver: bridge
